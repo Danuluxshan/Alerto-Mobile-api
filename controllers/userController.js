@@ -1,0 +1,284 @@
+// controllers/userController.js
+import User from '../models/User.js';
+import EmployeeActive from '../models/EmployeeActive.js';
+
+// Get all users
+export const getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find().select('-password').sort({ createdAt: -1 });
+    
+    // Format users to ensure consistent response structure
+    const formattedUsers = users.map(user => ({
+      _id: user._id.toString(),
+      fullname: user.fullname || '',
+      username: user.username || '',
+      email: user.email || '',
+      phonenumber: user.phonenumber || 0,
+      role: user.role || 'employee',
+      activeStatus: user.activeStatus !== undefined ? user.activeStatus : true,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }));
+    
+    res.json({
+      success: true,
+      data: formattedUsers,
+    });
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error fetching users',
+    });
+  }
+};
+
+// Get user by ID
+export const getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Ensure all required fields are present and properly formatted
+    const userData = {
+      _id: user._id.toString(),
+      fullname: user.fullname || '',
+      username: user.username || '',
+      email: user.email || '',
+      phonenumber: user.phonenumber || 0,
+      role: user.role || 'employee',
+      activeStatus: user.activeStatus !== undefined ? user.activeStatus : true,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+
+    res.json({
+      success: true,
+      data: userData,
+    });
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error fetching user',
+    });
+  }
+};
+
+// Create user
+export const createUser = async (req, res) => {
+  try {
+    const { fullname, username, email, phonenumber, password, role } = req.body;
+
+    // Validate required fields
+    if (!fullname || !username || !email || !phonenumber || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'All fields are required',
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      $or: [{ email: email.toLowerCase() }, { username }],
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: 'User with this email or username already exists',
+      });
+    }
+
+    // Hash password
+    const bcrypt = (await import('bcryptjs')).default;
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user
+    const user = new User({
+      fullname,
+      username,
+      email: email.toLowerCase(),
+      phonenumber,
+      password: hashedPassword,
+      role: role || 'employee',
+    });
+
+    await user.save();
+
+    // Create EmployeeActive entry
+    const employeeActive = new EmployeeActive({
+      user_id: user._id,
+      active_status: true,
+    });
+    await employeeActive.save();
+
+    // Return user without password
+    const userData = {
+      id: user._id,
+      fullname: user.fullname,
+      username: user.username,
+      email: user.email,
+      phonenumber: user.phonenumber,
+      role: user.role,
+      activeStatus: user.activeStatus,
+    };
+
+    res.status(201).json({
+      success: true,
+      data: userData,
+    });
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error creating user',
+    });
+  }
+};
+
+// Update user
+export const updateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fullname, username, email, phonenumber, role, activeStatus } = req.body;
+
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Update fields
+    if (fullname) user.fullname = fullname;
+    if (username) user.username = username;
+    if (email) user.email = email.toLowerCase();
+    if (phonenumber !== undefined) user.phonenumber = phonenumber;
+    if (role) user.role = role;
+    if (activeStatus !== undefined) user.activeStatus = activeStatus;
+
+    await user.save();
+
+    // Update EmployeeActive if activeStatus changed
+    if (activeStatus !== undefined) {
+      await EmployeeActive.findOneAndUpdate(
+        { user_id: id },
+        { active_status: activeStatus },
+        { upsert: true }
+      );
+    }
+
+    const userData = {
+      id: user._id,
+      fullname: user.fullname,
+      username: user.username,
+      email: user.email,
+      phonenumber: user.phonenumber,
+      role: user.role,
+      activeStatus: user.activeStatus,
+    };
+
+    res.json({
+      success: true,
+      data: userData,
+    });
+  } catch (error) {
+    console.error('Update user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error updating user',
+    });
+  }
+};
+
+// Delete user
+export const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findByIdAndDelete(id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Delete EmployeeActive entry
+    await EmployeeActive.findOneAndDelete({ user_id: id });
+
+    res.json({
+      success: true,
+      message: 'User deleted successfully',
+    });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error deleting user',
+    });
+  }
+};
+
+// Get active employees (only those with active_status: true)
+export const getActiveEmployees = async (req, res) => {
+  try {
+    const activeEmployees = await EmployeeActive.find({ active_status: true })
+      .populate('user_id', 'fullname username email phonenumber role')
+      .select('-password');
+
+    res.json({
+      success: true,
+      data: activeEmployees.map(emp => ({
+        _id: emp._id.toString(),
+        user_id: emp.user_id,
+        active_status: emp.active_status,
+        createdat: emp.createdAt,
+        updatedat: emp.updatedAt,
+      })),
+    });
+  } catch (error) {
+    console.error('Get active employees error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error fetching active employees',
+    });
+  }
+};
+
+// Get all employee active records (for status checking)
+export const getAllEmployeeActive = async (req, res) => {
+  try {
+    const allEmployeeActive = await EmployeeActive.find()
+      .populate('user_id', 'fullname username email phonenumber role')
+      .select('-password')
+      .sort({ updatedAt: -1 }); // Sort by most recent first
+
+    res.json({
+      success: true,
+      data: allEmployeeActive.map(emp => ({
+        _id: emp._id.toString(),
+        user_id: emp.user_id,
+        active_status: emp.active_status,
+        createdat: emp.createdAt,
+        updatedat: emp.updatedAt,
+      })),
+    });
+  } catch (error) {
+    console.error('Get all employee active error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error fetching employee active records',
+    });
+  }
+};
