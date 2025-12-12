@@ -6,11 +6,11 @@ const employeeActiveSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-    unique: true,
+    // Removed unique: true to allow multiple records (one per active/inactive cycle)
   },
   active_status: {
     type: Boolean,
-    default: true,
+    default: false,
   },
 }, {
   timestamps: true,

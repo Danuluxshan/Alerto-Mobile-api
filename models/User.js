@@ -33,10 +33,6 @@ const userSchema = new mongoose.Schema({
     enum: ['admin', 'employee', 'superadmin'],
     default: 'employee',
   },
-  activeStatus: {
-    type: Boolean,
-    default: true,
-  },
 }, {
   timestamps: true, // Adds createdAt and updatedAt
 });
