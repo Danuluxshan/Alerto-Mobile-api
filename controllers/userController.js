@@ -1,24 +1,62 @@
 // controllers/userController.js
-import User from '../models/User.js';
 import EmployeeActive from '../models/EmployeeActive.js';
+import User from '../models/User.js';
 
 // Get all users
 export const getAllUsers = async (req, res) => {
   try {
     const users = await User.find().select('-password').sort({ createdAt: -1 });
     
+    // Get today's date (start of day for comparison)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    // Get all employee active records
+    const employeeActiveRecords = await EmployeeActive.find()
+      .populate('user_id', '_id')
+      .sort({ createdAt: -1 });
+    
+    // Create a map of user_id to today's active status
+    // Only records with active_status === true AND createdAt date is today should be considered active
+    const activeStatusMap = new Map();
+    
+    employeeActiveRecords.forEach(emp => {
+      const userId = emp.user_id._id ? emp.user_id._id.toString() : emp.user_id.toString();
+      const createdAt = new Date(emp.createdAt);
+      
+      // Check if the record was created today (within today's date range)
+      // AND has active_status === true
+      if (createdAt >= today && createdAt <= todayEnd && emp.active_status === true) {
+        // Only set if not already set (to get the most recent one if multiple exist)
+        // This ensures we only mark as active if there's a true record created today
+        if (!activeStatusMap.has(userId)) {
+          activeStatusMap.set(userId, true);
+        }
+      }
+    });
+    
     // Format users to ensure consistent response structure
-    const formattedUsers = users.map(user => ({
-      _id: user._id.toString(),
-      fullname: user.fullname || '',
-      username: user.username || '',
-      email: user.email || '',
-      phonenumber: user.phonenumber || 0,
-      role: user.role || 'employee',
-      activeStatus: user.activeStatus !== undefined ? user.activeStatus : true,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    }));
+    const formattedUsers = users.map(user => {
+      const userId = user._id.toString();
+      // Get active status from employeesactives for today
+      // Only true if there's a record for today with active_status === true
+      // Default to false if no record or record is not active
+      const activeStatus = activeStatusMap.get(userId) === true;
+      
+      return {
+        _id: user._id.toString(),
+        fullname: user.fullname || '',
+        username: user.username || '',
+        email: user.email || '',
+        phonenumber: user.phonenumber || 0,
+        role: user.role || 'employee',
+        activeStatus: activeStatus, // From employeesactives table for today
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      };
+    });
     
     res.json({
       success: true,
@@ -45,6 +83,28 @@ export const getUserById = async (req, res) => {
       });
     }
 
+    // Get today's date
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    // Get employee active status for today - check all records and find one created today
+    const employeeActiveRecords = await EmployeeActive.find({ user_id: user._id })
+      .sort({ createdAt: -1 });
+    
+    let activeStatus = false;
+    
+    // Check if there's a record created today with active_status === true
+    for (const emp of employeeActiveRecords) {
+      const createdAt = new Date(emp.createdAt);
+      // Check if the record was created today AND has active_status === true
+      if (createdAt >= today && createdAt <= todayEnd && emp.active_status === true) {
+        activeStatus = true;
+        break; // Found today's active record, no need to check further
+      }
+    }
+    
     // Ensure all required fields are present and properly formatted
     const userData = {
       _id: user._id.toString(),
@@ -53,7 +113,7 @@ export const getUserById = async (req, res) => {
       email: user.email || '',
       phonenumber: user.phonenumber || 0,
       role: user.role || 'employee',
-      activeStatus: user.activeStatus !== undefined ? user.activeStatus : true,
+      activeStatus: activeStatus, // From employeesactives table for today
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -112,10 +172,10 @@ export const createUser = async (req, res) => {
 
     await user.save();
 
-    // Create EmployeeActive entry
+    // Create EmployeeActive entry (default to false, user will activate themselves)
     const employeeActive = new EmployeeActive({
       user_id: user._id,
-      active_status: true,
+      active_status: false,
     });
     await employeeActive.save();
 
@@ -127,7 +187,7 @@ export const createUser = async (req, res) => {
       email: user.email,
       phonenumber: user.phonenumber,
       role: user.role,
-      activeStatus: user.activeStatus,
+      activeStatus: false, // From employeesactives (default false)
     };
 
     res.status(201).json({
@@ -147,7 +207,7 @@ export const createUser = async (req, res) => {
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { fullname, username, email, phonenumber, role, activeStatus } = req.body;
+    const { fullname, username, email, phonenumber, role } = req.body;
 
     const user = await User.findById(id);
 
@@ -158,23 +218,35 @@ export const updateUser = async (req, res) => {
       });
     }
 
-    // Update fields
+    // Update fields (activeStatus is no longer in User model)
     if (fullname) user.fullname = fullname;
     if (username) user.username = username;
     if (email) user.email = email.toLowerCase();
     if (phonenumber !== undefined) user.phonenumber = phonenumber;
     if (role) user.role = role;
-    if (activeStatus !== undefined) user.activeStatus = activeStatus;
 
     await user.save();
 
-    // Update EmployeeActive if activeStatus changed
-    if (activeStatus !== undefined) {
-      await EmployeeActive.findOneAndUpdate(
-        { user_id: id },
-        { active_status: activeStatus },
-        { upsert: true }
-      );
+    // Get today's date for active status
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    // Get employee active status for today - check all records and find one created today
+    const employeeActiveRecords = await EmployeeActive.find({ user_id: id })
+      .sort({ createdAt: -1 });
+    
+    let activeStatus = false;
+    
+    // Check if there's a record created today with active_status === true
+    for (const emp of employeeActiveRecords) {
+      const createdAt = new Date(emp.createdAt);
+      // Check if the record was created today AND has active_status === true
+      if (createdAt >= today && createdAt <= todayEnd && emp.active_status === true) {
+        activeStatus = true;
+        break; // Found today's active record, no need to check further
+      }
     }
 
     const userData = {
@@ -184,7 +256,7 @@ export const updateUser = async (req, res) => {
       email: user.email,
       phonenumber: user.phonenumber,
       role: user.role,
-      activeStatus: user.activeStatus,
+      activeStatus: activeStatus, // From employeesactives table for today
     };
 
     res.json({

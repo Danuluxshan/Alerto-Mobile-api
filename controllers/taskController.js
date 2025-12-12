@@ -68,20 +68,23 @@ export const getTasksByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
     
+    // Find tasks where userId is in the user_ids array
     const tasks = await Task.find({ user_ids: userId })
       .populate('threat_id')
       .populate('user_ids', 'fullname username email')
       .sort({ createdAt: -1 });
 
+    // Ensure we always return an array, even if empty
     res.json({
       success: true,
-      data: tasks,
+      data: Array.isArray(tasks) ? tasks : [],
     });
   } catch (error) {
     console.error('Get tasks by user error:', error);
     res.status(500).json({
       success: false,
       error: 'Error fetching user tasks',
+      data: [], // Ensure data is always an array
     });
   }
 };

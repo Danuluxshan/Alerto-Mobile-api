@@ -38,6 +38,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/cameras', cameraRoutes);
 app.use('/api/threats', threatRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/support-legal', require('./routes/supportLegal'));
 
 // 404 handler
 app.use((req, res) => {

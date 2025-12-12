@@ -1,7 +1,8 @@
 // controllers/authController.js
-import User from '../models/User.js';
-import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import EmployeeActive from '../models/EmployeeActive.js';
+import User from '../models/User.js';
 
 // Generate JWT Token
 const generateToken = (userId) => {
@@ -52,6 +53,28 @@ export const login = async (req, res) => {
     // Generate token
     const token = generateToken(user._id);
 
+    // Get today's date for active status
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    // Get employee active status for today - check all records and find one created today
+    const employeeActiveRecords = await EmployeeActive.find({ user_id: user._id })
+      .sort({ createdAt: -1 });
+    
+    let activeStatus = false;
+    
+    // Check if there's a record created today with active_status === true
+    for (const emp of employeeActiveRecords) {
+      const createdAt = new Date(emp.createdAt);
+      // Check if the record was created today AND has active_status === true
+      if (createdAt >= today && createdAt <= todayEnd && emp.active_status === true) {
+        activeStatus = true;
+        break; // Found today's active record, no need to check further
+      }
+    }
+
     // Return user data (without password)
     const userData = {
       id: user._id.toString(), // Ensure ID is a string
@@ -60,7 +83,7 @@ export const login = async (req, res) => {
       email: user.email,
       phonenumber: user.phonenumber,
       role: user.role,
-      activeStatus: user.activeStatus,
+      activeStatus: activeStatus, // From employeesactives table for today
     };
 
     res.json({

@@ -1,12 +1,12 @@
 // scripts/seed.js
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
-import User from '../models/User.js';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
 import Camera from '../models/Camera.js';
-import Threat from '../models/Threat.js';
-import Task from '../models/Task.js';
 import EmployeeActive from '../models/EmployeeActive.js';
+import Task from '../models/Task.js';
+import Threat from '../models/Threat.js';
+import User from '../models/User.js';
 
 dotenv.config();
 
@@ -127,12 +127,13 @@ const seedData = async () => {
       },
     ];
 
-    // Hash passwords and create users
+    // Hash passwords and create users (remove activeStatus as it's no longer in User model)
     const users = [];
     for (const user of userData) {
       const hashedPassword = await bcrypt.hash(user.password, 10);
+      const { activeStatus, ...userWithoutActiveStatus } = user; // Remove activeStatus
       const newUser = new User({
-        ...user,
+        ...userWithoutActiveStatus,
         password: hashedPassword,
       });
       await newUser.save();
