@@ -1,15 +1,18 @@
 // server.js
-import express from 'express';
-import dotenv from 'dotenv';
 import cors from 'cors';
+import dotenv from 'dotenv';
+import express from 'express';
 import connectDB from './config/database.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
-import userRoutes from './routes/users.js';
 import cameraRoutes from './routes/cameras.js';
-import threatRoutes from './routes/threats.js';
+import contactRoutes from './routes/contact.js';
+import employeeActiveRoutes from './routes/employeeActive.js';
+import supportLegalRoutes from './routes/supportLegal.js';
 import taskRoutes from './routes/tasks.js';
+import threatRoutes from './routes/threats.js';
+import userRoutes from './routes/users.js';
 
 // Load environment variables
 dotenv.config();
@@ -38,7 +41,9 @@ app.use('/api/users', userRoutes);
 app.use('/api/cameras', cameraRoutes);
 app.use('/api/threats', threatRoutes);
 app.use('/api/tasks', taskRoutes);
-app.use('/api/support-legal', require('./routes/supportLegal'));
+app.use('/api/support-legal', supportLegalRoutes);
+app.use('/api/employee-active', employeeActiveRoutes);
+app.use('/api/contact', contactRoutes);
 
 // 404 handler
 app.use((req, res) => {

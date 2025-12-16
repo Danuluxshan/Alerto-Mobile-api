@@ -164,8 +164,13 @@ export const updateTask = async (req, res) => {
     }
 
     if (report_message !== undefined) {
-      if (review_status === true && report_message) {
-        task.report_message = report_message;
+      if (review_status === true && report_message && Array.isArray(report_message)) {
+        // Ensure each report message entry has reviewed_time
+        task.report_message = report_message.map((msg) => ({
+          user_id: msg.user_id,
+          message: msg.message,
+          reviewed_time: msg.reviewed_time ? new Date(msg.reviewed_time) : new Date(),
+        }));
       } else {
         task.report_message = null;
       }
