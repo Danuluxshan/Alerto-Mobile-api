@@ -53,6 +53,8 @@ export const getAllUsers = async (req, res) => {
         phonenumber: user.phonenumber || 0,
         role: user.role || 'employee',
         activeStatus: activeStatus, // From employeesactives table for today
+        avatar: user.avatar || null,
+        profile: user.avatar || null, // Alias for avatar for frontend compatibility
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       };
@@ -114,6 +116,8 @@ export const getUserById = async (req, res) => {
       phonenumber: user.phonenumber || 0,
       role: user.role || 'employee',
       activeStatus: activeStatus, // From employeesactives table for today
+      avatar: user.avatar || null,
+      profile: user.avatar || null, // Alias for avatar for frontend compatibility
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -188,6 +192,8 @@ export const createUser = async (req, res) => {
       phonenumber: user.phonenumber,
       role: user.role,
       activeStatus: false, // From employeesactives (default false)
+      avatar: user.avatar || null,
+      profile: user.avatar || null, // Alias for avatar for frontend compatibility
     };
 
     res.status(201).json({
@@ -224,6 +230,7 @@ export const updateUser = async (req, res) => {
     if (email) user.email = email.toLowerCase();
     if (phonenumber !== undefined) user.phonenumber = phonenumber;
     if (role) user.role = role;
+    if (req.body.avatar !== undefined) user.avatar = req.body.avatar; // Allow null to clear avatar
 
     await user.save();
 
@@ -257,6 +264,8 @@ export const updateUser = async (req, res) => {
       phonenumber: user.phonenumber,
       role: user.role,
       activeStatus: activeStatus, // From employeesactives table for today
+      avatar: user.avatar || null,
+      profile: user.avatar || null, // Alias for avatar for frontend compatibility
     };
 
     res.json({

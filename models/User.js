@@ -33,6 +33,11 @@ const userSchema = new mongoose.Schema({
     enum: ['admin', 'employee', 'superadmin'],
     default: 'employee',
   },
+  avatar: {
+    type: String,
+    enum: ['boy', 'girl'],
+    default: null,
+  },
 }, {
   timestamps: true, // Adds createdAt and updatedAt
 });

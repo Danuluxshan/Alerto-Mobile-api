@@ -14,7 +14,6 @@ const cameraSchema = new mongoose.Schema({
   },
   camera_status: {
     type: Boolean,
-    default: true,
   },
   camera_view: {
     type: String, // URL to video/image
