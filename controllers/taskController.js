@@ -1,6 +1,8 @@
 // controllers/taskController.js
 import Task from '../models/Task.js';
 import Threat from '../models/Threat.js';
+import User from '../models/User.js';
+import { sendTaskAssignmentNotification, sendStaffResponseNotification } from '../services/notificationService.js';
 
 // Get all tasks
 export const getAllTasks = async (req, res) => {
@@ -131,6 +133,30 @@ export const createTask = async (req, res) => {
       .populate('threat_id')
       .populate('user_ids', 'fullname username email');
 
+    // Send push notifications to assigned staff members (non-blocking)
+    try {
+      // Get camera details for notification
+      const Camera = (await import('../models/Camera.js')).default;
+      const camera = await Camera.findById(threat.camera_id);
+      const cameraName = camera ? camera.name : 'Unknown Camera';
+      const cameraLocation = camera ? camera.location : '';
+
+      // Send notifications asynchronously (don't wait for it)
+      sendTaskAssignmentNotification(
+        user_ids,
+        task._id.toString(),
+        threat.threat_type || 'Alert',
+        cameraName,
+        cameraLocation
+      ).catch(error => {
+        console.error('Error sending task assignment notification:', error);
+        // Don't fail the request if notification fails
+      });
+    } catch (notificationError) {
+      console.error('Error setting up task assignment notification:', notificationError);
+      // Don't fail the request if notification setup fails
+    }
+
     res.status(201).json({
       success: true,
       data: populatedTask,
@@ -163,14 +189,24 @@ export const updateTask = async (req, res) => {
       task.review_status = review_status;
     }
 
+    let latestResponse = null;
+    let responseStaffUser = null;
+    
     if (report_message !== undefined) {
       if (review_status === true && report_message && Array.isArray(report_message)) {
         // Ensure each report message entry has reviewed_time
-        task.report_message = report_message.map((msg) => ({
+        const processedMessages = report_message.map((msg) => ({
           user_id: msg.user_id,
           message: msg.message,
           reviewed_time: msg.reviewed_time ? new Date(msg.reviewed_time) : new Date(),
         }));
+        
+        task.report_message = processedMessages;
+        
+        // Get the latest response for notification
+        if (processedMessages.length > 0) {
+          latestResponse = processedMessages[processedMessages.length - 1];
+        }
       } else {
         task.report_message = null;
       }
@@ -181,6 +217,38 @@ export const updateTask = async (req, res) => {
     const populatedTask = await Task.findById(task._id)
       .populate('threat_id')
       .populate('user_ids', 'fullname username email');
+
+    // Send push notification to admins when staff responds
+    if (latestResponse && review_status === true) {
+      try {
+        // Get staff user details
+        responseStaffUser = await User.findById(latestResponse.user_id).select('fullname username');
+        const staffName = responseStaffUser ? (responseStaffUser.fullname || responseStaffUser.username) : 'Staff';
+
+        // Get threat and camera details
+        const threat = await Threat.findById(task.threat_id);
+        if (threat) {
+          const Camera = (await import('../models/Camera.js')).default;
+          const camera = await Camera.findById(threat.camera_id);
+          const cameraName = camera ? camera.name : 'Unknown Camera';
+
+          // Send notifications to admins asynchronously (don't wait for it)
+          sendStaffResponseNotification(
+            staffName,
+            cameraName,
+            latestResponse.message,
+            task._id.toString(),
+            latestResponse.reviewed_time
+          ).catch(error => {
+            console.error('Error sending staff response notification:', error);
+            // Don't fail the request if notification fails
+          });
+        }
+      } catch (notificationError) {
+        console.error('Error setting up staff response notification:', notificationError);
+        // Don't fail the request if notification setup fails
+      }
+    }
 
     res.json({
       success: true,

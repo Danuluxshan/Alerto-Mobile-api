@@ -363,3 +363,98 @@ export const getAllEmployeeActive = async (req, res) => {
     });
   }
 };
+
+// Register FCM token for a user
+export const registerFCMToken = async (req, res) => {
+  try {
+    const { userId, fcmToken } = req.body;
+
+    if (!userId || !fcmToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID and FCM token are required',
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Initialize fcmTokens array if it doesn't exist
+    if (!user.fcmTokens) {
+      user.fcmTokens = [];
+    }
+
+    // Add token if it doesn't already exist (avoid duplicates)
+    if (!user.fcmTokens.includes(fcmToken)) {
+      user.fcmTokens.push(fcmToken);
+      await user.save();
+      console.log(`✅ FCM token registered for user ${userId}`);
+    } else {
+      console.log(`ℹ️  FCM token already exists for user ${userId}`);
+    }
+
+    res.json({
+      success: true,
+      message: 'FCM token registered successfully',
+    });
+  } catch (error) {
+    console.error('Register FCM token error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error registering FCM token',
+    });
+  }
+};
+
+// Update FCM token for a user (same as register, but can be used for updates)
+export const updateFCMToken = async (req, res) => {
+  try {
+    const { userId, fcmToken } = req.body;
+
+    if (!userId || !fcmToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID and FCM token are required',
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Initialize fcmTokens array if it doesn't exist
+    if (!user.fcmTokens) {
+      user.fcmTokens = [];
+    }
+
+    // Remove old token if exists and add new one
+    // This allows updating tokens when app is reinstalled
+    user.fcmTokens = user.fcmTokens.filter(token => token !== fcmToken);
+    user.fcmTokens.push(fcmToken);
+    
+    await user.save();
+    console.log(`✅ FCM token updated for user ${userId}`);
+
+    res.json({
+      success: true,
+      message: 'FCM token updated successfully',
+    });
+  } catch (error) {
+    console.error('Update FCM token error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error updating FCM token',
+    });
+  }
+};

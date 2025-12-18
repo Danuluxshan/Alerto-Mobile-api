@@ -38,6 +38,10 @@ const userSchema = new mongoose.Schema({
     enum: ['boy', 'girl'],
     default: null,
   },
+  fcmTokens: {
+    type: [String],
+    default: [],
+  },
 }, {
   timestamps: true, // Adds createdAt and updatedAt
 });
