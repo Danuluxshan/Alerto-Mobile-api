@@ -2,7 +2,7 @@
 import Task from '../models/Task.js';
 import Threat from '../models/Threat.js';
 import User from '../models/User.js';
-import { sendTaskAssignmentNotification, sendStaffResponseNotification } from '../services/notificationService.js';
+import { sendStaffResponseNotification, sendTaskAssignmentNotification } from '../services/notificationService.js';
 
 // Get all tasks
 export const getAllTasks = async (req, res) => {
@@ -194,10 +194,11 @@ export const updateTask = async (req, res) => {
     
     if (report_message !== undefined) {
       if (review_status === true && report_message && Array.isArray(report_message)) {
-        // Ensure each report message entry has reviewed_time
+        // Ensure each report message entry has reviewed_time and alertType
         const processedMessages = report_message.map((msg) => ({
           user_id: msg.user_id,
           message: msg.message,
+          alertType: msg.alertType || 'true', // Default to 'true' for backward compatibility
           reviewed_time: msg.reviewed_time ? new Date(msg.reviewed_time) : new Date(),
         }));
         
@@ -259,6 +260,96 @@ export const updateTask = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Error updating task',
+    });
+  }
+};
+
+// Get alert response history for a user
+export const getAlertHistory = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required',
+      });
+    }
+
+    // Find tasks where:
+    // 1. User is in user_ids array
+    // 2. review_status is true (reviewed/completed)
+    // 3. report_message exists and contains an entry for this user
+    const tasks = await Task.find({
+      user_ids: userId,
+      review_status: true,
+      report_message: { $exists: true, $ne: null, $not: { $size: 0 } }
+    })
+      .populate('threat_id')
+      .populate('user_ids', 'fullname username email')
+      .sort({ updatedAt: -1 }); // Sort by most recently updated first
+
+    // Transform tasks to history format
+    const history = [];
+
+    for (const task of tasks) {
+      // Find this user's report message
+      const userReport = task.report_message?.find(
+        (report) => report.user_id?.toString() === userId || report.user_id?._id?.toString() === userId
+      );
+
+      if (!userReport || !task.threat_id) {
+        continue; // Skip if no report for this user or no threat
+      }
+
+      // Get camera details
+      const Camera = (await import('../models/Camera.js')).default;
+      const camera = await Camera.findById(task.threat_id.camera_id);
+
+      if (!camera) {
+        continue; // Skip if camera not found
+      }
+
+      // Format reviewed_time
+      const reviewedTime = userReport.reviewed_time instanceof Date
+        ? userReport.reviewed_time
+        : new Date(userReport.reviewed_time);
+
+      history.push({
+        id: `response_${task._id}_${userReport.reviewed_time}`,
+        taskId: task._id.toString(),
+        threatId: task.threat_id._id.toString(),
+        threatType: task.threat_id.threat_type || 'Alert',
+        threatLevel: task.threat_id.threat_level || 'High',
+        cameraId: camera._id.toString(),
+        cameraName: camera.name || 'Unknown Camera',
+        cameraLocation: camera.location || '',
+        cameraView: camera.camera_view || '',
+        threatCreatedAt: task.threat_id.createdAt || task.threat_id.createdat || new Date(),
+        alertType: userReport.alertType || 'true',
+        message: userReport.message || '',
+        reviewed_time: reviewedTime.toISOString(),
+        userId: userId,
+      });
+    }
+
+    // Sort by reviewed_time (latest first)
+    history.sort((a, b) => {
+      const timeA = new Date(a.reviewed_time).getTime();
+      const timeB = new Date(b.reviewed_time).getTime();
+      return timeB - timeA; // Descending order (latest first)
+    });
+
+    res.json({
+      success: true,
+      data: history,
+    });
+  } catch (error) {
+    console.error('Get alert history error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error fetching alert history',
+      data: [],
     });
   }
 };
