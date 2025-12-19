@@ -1,12 +1,13 @@
 // routes/tasks.js
 import express from 'express';
 import {
-  getAllTasks,
-  getTaskById,
-  getTasksByUserId,
-  createTask,
-  updateTask,
-  deleteTask,
+    createTask,
+    deleteTask,
+    getAlertHistory,
+    getAllTasks,
+    getTaskById,
+    getTasksByUserId,
+    updateTask,
 } from '../controllers/taskController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
@@ -20,6 +21,9 @@ router.get('/', getAllTasks);
 
 // GET /api/tasks/user/:userId
 router.get('/user/:userId', getTasksByUserId);
+
+// GET /api/tasks/history/:userId
+router.get('/history/:userId', getAlertHistory);
 
 // GET /api/tasks/:id
 router.get('/:id', getTaskById);

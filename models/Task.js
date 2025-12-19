@@ -11,6 +11,11 @@ const reportMessageEntrySchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  alertType: {
+    type: String,
+    enum: ['true', 'false'],
+    required: true,
+  },
   reviewed_time: {
     type: Date,
     default: Date.now,
